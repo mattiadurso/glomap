@@ -52,7 +52,7 @@ bool GlobalMapper::Solve(const colmap::Database& database,
     run_timer.Start();
     // Relative pose relies on the undistorted images
     UndistortImages(cameras, images, true);
-    EstimateRelativePoses(view_graph, cameras, images, options_.opt_relpose);
+    EstimateRelativePoses(database, view_graph, cameras, images, options_.opt_relpose); // add database
 
     InlierThresholdOptions inlier_thresholds = options_.inlier_thresholds;
     // Undistort the images and filter edges by inlier number

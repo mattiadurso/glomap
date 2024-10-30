@@ -6,7 +6,8 @@
 
 namespace glomap {
 
-void EstimateRelativePoses(ViewGraph& view_graph,
+void EstimateRelativePoses(const colmap::Database& database,
+                           ViewGraph& view_graph,
                            std::unordered_map<camera_t, Camera>& cameras,
                            std::unordered_map<image_t, Image>& images,
                            const RelativePoseEstimationOptions& options) {
@@ -21,7 +22,18 @@ void EstimateRelativePoses(ViewGraph& view_graph,
   const int64_t interval =
       std::ceil(static_cast<double>(num_image_pairs) / kNumChunks);
 
-  colmap::ThreadPool thread_pool(colmap::ThreadPool::kMaxNumThreads);
+  // multi-threading management. More than one creates problems when accessing database.
+  // old
+  // colmap::ThreadPool thread_pool(colmap::ThreadPool::kMaxNumThreads);
+  // new
+  // colmap::ThreadPool thread_pool(options.load_poses ? 1 : colmap::ThreadPool::kMaxNumThreads); 
+  // fancy
+  int num_threads = 1;
+  if (!options.load_poses){
+    num_threads = colmap::ThreadPool::kMaxNumThreads;
+  }
+  colmap::ThreadPool thread_pool(num_threads);
+  
 
   LOG(INFO) << "Estimating relative pose for " << num_image_pairs << " pairs";
   for (int64_t chunk_id = 0; chunk_id < kNumChunks; chunk_id++) {
@@ -53,29 +65,40 @@ void EstimateRelativePoses(ViewGraph& view_graph,
         }
 
         inliers.clear();
-        poselib::CameraPose pose_rel_calc;
-        try {
-          poselib::estimate_relative_pose(
-              points2D_1,
-              points2D_2,
-              ColmapCameraToPoseLibCamera(cameras[image1.camera_id]),
-              ColmapCameraToPoseLibCamera(cameras[image2.camera_id]),
-              options.ransac_options,
-              options.bundle_options,
-              &pose_rel_calc,
-              &inliers);
-        } catch (const std::exception& e) {
-          LOG(ERROR) << "Error in relative pose estimation: " << e.what();
-          image_pair.is_valid = false;
-          return;
-        }
 
-        // Convert the relative pose to the glomap format
-        for (int i = 0; i < 4; i++) {
-          image_pair.cam2_from_cam1.rotation.coeffs()[i] =
-              pose_rel_calc.q[(i + 1) % 4];
+        if (!options.load_poses) {
+          poselib::CameraPose pose_rel_calc;
+          try {
+            poselib::estimate_relative_pose(
+                points2D_1,
+                points2D_2,
+                ColmapCameraToPoseLibCamera(cameras[image1.camera_id]),
+                ColmapCameraToPoseLibCamera(cameras[image2.camera_id]),
+                options.ransac_options,
+                options.bundle_options,
+                &pose_rel_calc,
+                &inliers);
+          } catch (const std::exception& e) {
+            LOG(ERROR) << "Error in relative pose estimation: " << e.what();
+            image_pair.is_valid = false;
+            return;
+          }
+
+          // Convert the relative pose to the glomap format | (w,x,y,z) -> (x,y,z,w)
+          for (int i = 0; i < 4; i++) {
+            image_pair.cam2_from_cam1.rotation.coeffs()[i] =
+                pose_rel_calc.q[(i + 1) % 4];
+          }
+          image_pair.cam2_from_cam1.translation = pose_rel_calc.t;
+
+        }else{
+          // load poses from db
+          colmap::TwoViewGeometry pose = 
+              database.ReadTwoViewGeometry(
+                image_pair.image_id1, image_pair.image_id2);
+          image_pair.cam2_from_cam1.rotation = pose.cam2_from_cam1.rotation;
+          image_pair.cam2_from_cam1.translation = pose.cam2_from_cam1.translation;
         }
-        image_pair.cam2_from_cam1.translation = pose_rel_calc.t;
       });
     }
 

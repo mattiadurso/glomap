@@ -1,0 +1,10 @@
+conda activate colmap_env
+
+mkdir build
+cd build
+cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=89 
+ninja && sudo ninja install
+
+
+# For debugging
+cmake .. -GNinja -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_BUILD_TYPE=Debug

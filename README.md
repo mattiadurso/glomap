@@ -2,7 +2,7 @@
 
 [Project page](https://lpanaf.github.io/eccv24_glomap/) | [Paper](https://arxiv.org/pdf/2407.20219)
 ---
-##
+## Add
 I add one flag, namely `--RelPoseEstimation.load_poses arg (=0)`, that allows the user to load poses from the `two_view_geometries` database's table into glomap computation. If the flag is set to True, the multi-threading is disabled during the essential matrix computation since not needed from a speed point of view and creates problem when querying the database. If the flag is set to False, there are no variations.
 
 ## About
